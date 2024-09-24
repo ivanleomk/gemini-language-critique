@@ -1,10 +1,10 @@
 import streamlit as st
-from audiorecorder import audiorecorder
+from st_audiorec import st_audiorec
 from jinja2 import Template
 from model import PronounciationEvaluation
 import google.generativeai as genai
 import instructor
-
+from pydub import AudioSegment
 
 text = """
 La vie en France est très différente de celle au Canada. Ici, il fait toujours chaud. Chaque dimanche, nous allons à la magnifique plage de Biarritz et nous achetons des glaces après avoir nagé dans la mer.
@@ -40,30 +40,35 @@ st.title("🎈 Pronunciation Evaluation")
 
 st.title("Audio Recorder")
 
-st.write("Pronounciation")
 st.write(text)
-audio = audiorecorder("Click to record", "Click to stop recording")
+
+wav_audio_data = st_audiorec()
+
+if wav_audio_data is not None:
+    st.audio(wav_audio_data, format="audio/wav")
+
+st.session_state.audio_data = AudioSegment(wav_audio_data)
 # To play audio in frontend:
-st.audio(audio.export().read())
+
 
 # To save audio to a file, use pydub export method:
-st.session_state.audio_data = audio.export(format="wav").read()
+
 
 if "resp" not in st.session_state:
     st.session_state.resp = None
 
+google_api_key = st.secrets["GOOGLE_API_KEY"]
+genai.configure(api_key=google_api_key)
+model = genai.GenerativeModel(model_name="models/gemini-1.5-pro-001")
+
+client = instructor.from_gemini(
+    client=model, mode=instructor.Mode.GEMINI_JSON, use_async=False
+)
+
 
 def analyze_text():
     # Read in the Google API key from Streamlit secrets
-    google_api_key = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=google_api_key)
-    model = genai.GenerativeModel(model_name="models/gemini-1.5-flash-001")
 
-    client = instructor.from_gemini(
-        client=model, mode=instructor.Mode.GEMINI_JSON, use_async=False
-    )
-
-    # To get audio properties, use pydub AudioSegment properties:
     st.session_state.resp = client.chat.completions.create(
         # model=model,
         response_model=PronounciationEvaluation,
@@ -73,10 +78,8 @@ def analyze_text():
                 "content": [
                     prompt.format(text=text),
                     {
-                        "content": {
-                            "mime_type": "audio/mp3",
-                            "data": st.session_state.audio_data,
-                        },
+                        "mime_type": "audio/mp3",
+                        "data": st.session_state.audio_data.export().read(),
                     },
                 ],
             },
@@ -115,11 +118,19 @@ if st.session_state.resp:
         end_time = time_to_seconds(mistake.end_ts)
 
         # Ensure end_time doesn't exceed audio duration
-        audio_duration = len(audio) / 1000  # Convert milliseconds to seconds
+        audio_duration = (
+            len(st.session_state.audio_data) / 1000
+        )  # Convert milliseconds to seconds
         end_time = min(end_time, audio_duration)
 
         # Extract the segment from start_time to end_time
-        segment = audio[int(start_time * 1000) : int(end_time * 1000)]
+        start_index = max(
+            0, int(start_time * 1000) - 2000
+        )  # Guard against negative index and add 2 seconds
+        end_index = min(
+            int(end_time * 1000) + 2000, len(st.session_state.audio_data)
+        )  # Ensure end_index does not exceed audio length
+        segment = st.session_state.audio_data[start_index:end_index]
 
         st.audio(segment.export().read())
 

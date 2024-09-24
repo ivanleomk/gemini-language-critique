@@ -1,5 +1,4 @@
 from pydantic import BaseModel, Field, ValidationInfo, model_validator
-from fuzzywuzzy import process
 from typing_extensions import Self
 
 
