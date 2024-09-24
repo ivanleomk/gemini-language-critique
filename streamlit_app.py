@@ -54,6 +54,9 @@ if "resp" not in st.session_state:
 
 
 def analyze_text():
+    # Read in the Google API key from Streamlit secrets
+    google_api_key = st.secrets["GOOGLE_API_KEY"]
+    genai.configure(api_key=google_api_key)
     model = genai.GenerativeModel(model_name="models/gemini-1.5-flash-001")
 
     client = instructor.from_gemini(
