@@ -2,3 +2,5 @@ streamlit
 jinja2
 instructor
 google-generativeai
+audiorecorder
+pydub
